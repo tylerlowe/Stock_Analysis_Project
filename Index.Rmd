@@ -1,0 +1,61 @@
+---
+title: "Stock Analysis Project"
+author: "Tyler Lowe"
+date: "`r Sys.Date()`"
+output: html_document
+runtime: shiny
+---
+
+<br /> 
+<br /> 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(dplyr)
+library(multidplyr)
+library(tidyquant) 
+library(parallel)
+library(tidyr)
+library(purrr)
+library(RPostgres)
+library(shiny)
+library(ggplot2)
+
+rh_user <- Sys.getenv("rh_user")
+rh_pw <- Sys.getenv("rh_pw")
+sql_user <- Sys.getenv("sql_user")
+sql_pw <- Sys.getenv("sql_pw")
+```
+
+This section will allow us to extract price history and a graph of log returns for a symbol:
+
+```{r, echo=FALSE}
+ui <- fluidPage(
+  textInput('Tickers', 'Enter a Ticker (Uppercase)', value = ''),
+  dataTableOutput('Table'),
+  plotOutput('Graph')
+)
+
+server <- function(input, output, session){
+  output$Table <- renderDataTable({
+    con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
+    user_input <- input$Tickers
+    on.exit(dbDisconnect(con), add = TRUE)
+    output_tbl <- tibble(dbGetQuery(con, paste0(
+      'SELECT symbol, date, open, high, low, close, volume, adjusted, log_ret_adj FROM "Stock_Data" WHERE symbol =', " '", paste(user_input), "'", 'ORDER BY "date" ASC')))
+    output_tbl
+  })
+  output$Graph <- renderPlot({
+    con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
+    user_input <- input$Tickers
+    output_tbl <- tibble(dbGetQuery(con, paste0(
+      'SELECT symbol, date, open, high, low, close, volume, adjusted, log_ret_adj FROM "Stock_Data" WHERE symbol =', " '", paste(user_input), "'", 'ORDER BY "date" ASC')))
+    ggplot(output_tbl, aes(date, log_ret_adj)) +
+    geom_line()
+  })
+}
+shinyApp(ui, server, options = list(height = 1000))
+```
