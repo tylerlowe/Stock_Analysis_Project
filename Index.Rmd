@@ -23,6 +23,7 @@ library(purrr)
 library(RPostgres)
 library(shiny)
 library(ggplot2)
+library(RobinHood)
 
 rh_user <- Sys.getenv("rh_user")
 rh_pw <- Sys.getenv("rh_pw")
@@ -30,31 +31,44 @@ sql_user <- Sys.getenv("sql_user")
 sql_pw <- Sys.getenv("sql_pw")
 ```
 
-This section will allow us to extract price history and a graph of log returns for a symbol:
+This section shows current holdings:
+
+```{r, echo=FALSE}
+ui <- fluidPage(
+  dataTableOutput('table')
+)
+
+server <- function(input, output, session){
+  output$table <- renderDataTable({
+    RH = RobinHood(username = rh_user, password = rh_pw) 
+    positions <- get_positions(RH)
+    positions
+    })
+}
+shinyApp(ui, server, options = list(height = 1000))
+```
+
+
+This section will allow us to graph of log returns for a symbol:
 
 ```{r, echo=FALSE}
 ui <- fluidPage(
   textInput('Tickers', 'Enter a Ticker (Uppercase)', value = ''),
-  dataTableOutput('Table'),
+  dateRangeInput('daterange', 'Select a Date Range'),
   plotOutput('Graph')
 )
 
 server <- function(input, output, session){
-  output$Table <- renderDataTable({
-    con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
-    user_input <- input$Tickers
-    on.exit(dbDisconnect(con), add = TRUE)
-    output_tbl <- tibble(dbGetQuery(con, paste0(
-      'SELECT symbol, date, open, high, low, close, volume, adjusted, log_ret_adj FROM "Stock_Data" WHERE symbol =', " '", paste(user_input), "'", 'ORDER BY "date" ASC')))
-    output_tbl
-  })
   output$Graph <- renderPlot({
     con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
     user_input <- input$Tickers
     output_tbl <- tibble(dbGetQuery(con, paste0(
       'SELECT symbol, date, open, high, low, close, volume, adjusted, log_ret_adj FROM "Stock_Data" WHERE symbol =', " '", paste(user_input), "'", 'ORDER BY "date" ASC')))
-    ggplot(output_tbl, aes(date, log_ret_adj)) +
-    geom_line()
+    output_tbl_filtered <- subset(output_tbl, date >= input$daterange[1] & date <= input$daterange[2]) 
+    ggplot(output_tbl_filtered, aes(date, log_ret_adj)) +
+    geom_line() +
+    geom_smooth(method = "loess") +
+    ggtitle('Log Returns with Local Regression Trendline')
   })
 }
 shinyApp(ui, server, options = list(height = 1000))
