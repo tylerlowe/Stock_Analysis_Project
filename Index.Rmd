@@ -45,7 +45,25 @@ server <- function(input, output, session){
     positions
     })
 }
-shinyApp(ui, server, options = list(height = 1000))
+shinyApp(ui, server)
+```
+
+
+This selection will display stop loss values:
+
+```{r, echo=FALSE}
+ui <- fluidPage(
+  tableOutput('table')
+)
+
+server <- function(input, output, session){
+  output$table <- renderTable({
+    con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
+    table <- tibble(dbGetQuery(con, paste0(
+      'SELECT * FROM "Stops"')))
+    })
+}
+shinyApp(ui, server)
 ```
 
 
