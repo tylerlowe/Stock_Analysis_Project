@@ -2,6 +2,9 @@ import robin_stocks as rs
 import os
 import psycopg2
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
 
 robin_user = os.environ.get("robinhood_user")
 robin_pass = os.environ.get("robinhood_pass")
@@ -46,3 +49,5 @@ symbols_list = list(positions_data.keys())   #get list of symbols
 
 #apply function to list
 map(execute_stop, symbols_list)
+
+print('Success')
