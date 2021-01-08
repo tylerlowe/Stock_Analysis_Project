@@ -112,4 +112,36 @@ try(dbExecute(con, 'DROP TABLE "Stops"'), silent = TRUE) #delete old table query
 dbWriteTable(con, name = "Stops", value = stops_tbl, append = TRUE)  #write stops to sql table
 
 
+#TECHNICAL INDICATORS
+
+library(ncar)
+library(tfplot)
+library(parallel)
+library(RPostgres)
+
+obv_price_divergence <- function(symbol){
+  data <- tibble(dbGetQuery(con, paste0(
+    'SELECT volume, adjusted FROM "Stock_Data" WHERE  symbol =', " '", paste(symbol), "'", ' ORDER BY "date" ASC')))
+  data <- na.omit(data)
+  if (nrow(data)>21) {
+    obv <- OBV(data$adjusted, data$volume)
+    obv_ema <- EMA(na.approx(obv, n=20))
+    close <- data$adjusted
+    close_ema <- EMA(na.approx(data$adjusted, n=20))
+    obv_diff <- ts((obv-obv_ema)/obv_ema)
+    close_diff <- ts((close-close_ema)/close_ema)
+    diff_obv_close <- ((obv_diff)-(close_diff))
+    obv_divergence <- last(diff_obv_close)
+    df <- data.frame(symbol, obv_divergence)
+    dbWriteTable(con, name = "Indicators", value = df, append = TRUE)
+  }
+  else {NA}
+}
+
+try(dbExecute(con, 'DROP TABLE "Indicators"'), silent = TRUE) #delete old table query
+
+mclapply(tickers_good$`tickers$symbol`, obv_price_divergence,
+         mc.preschedule = TRUE, mc.set.seed = TRUE,
+         mc.silent = FALSE, mc.cores = detectCores()-1,
+         mc.cleanup = TRUE, mc.allow.recursive = TRUE, affinity.list = NULL)
 
