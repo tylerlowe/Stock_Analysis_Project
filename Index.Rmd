@@ -102,8 +102,9 @@ ui <- fluidPage(
 server <- function(input, output, session){
   output$table <- renderDataTable({
     con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
-    table <- tibble(dbGetQuery(con, paste0(
+    indicators <- tibble(dbGetQuery(con, paste0(
       'SELECT * FROM "Indicators"')))
+    indicators
     })
 }
 shinyApp(ui, server)

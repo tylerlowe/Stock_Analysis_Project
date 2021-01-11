@@ -38,13 +38,13 @@ stops = pd.read_sql_query(postgreSQL_select_Query, conn)
 def execute_stop(symbol):
     last_price = positions_data[symbol]['price']
     quantity = positions_data[symbol]['quantity']
+    quantity = float(quantity)
+    last_price = float(last_price)
     stop_price = stops[symbol][0]
     if last_price < stop_price:   #execute sell if price < stop
-        rs.orders.order_sell_fractional_by_quantity(symbol,
-                                        quantity,
-                                        timeInForce='gtc',
-                                        extendedHours=False)
-        
+        print('Selling:', symbol)
+        rs.orders.order_sell_fractional_by_quantity(symbol, quantity, timeInForce='gfd')
+        rs.order_Sell
 symbols_list = list(positions_data.keys())   #get list of symbols
 
 #apply function to list

@@ -9,6 +9,12 @@ library(RobinHood)
 library(RPostgres)
 library(tibble)
 library(data.table)
+library(ncar)
+library(tfplot)
+library(tictoc)
+library(tibble)
+library(TTR)
+library(furrr)
 
 rh_user <- Sys.getenv("rh_user")
 rh_pw <- Sys.getenv("rh_pw")
@@ -38,57 +44,76 @@ tickers_list <- tickers_good %>%
   group_by((row_number()-1) %/% (n()/num_groups)) %>%
   nest %>% pull(data)
 
-#function to get data
+#rsi function with error handling
+rsi_fun <- possibly(RSI, otherwise = NA)
+
+#detect cores
+cl <- detectCores() - 1  
+
+from <- "1900-01-01"
+to   <- today()
+
+
 Get_Data <- function(tickers_good) {
-  #detect cores
-  cl <- detectCores() - 1           
-  #add groups
   group <- rep(1:cl, length.out = nrow(tickers_good))
   tickers_good <- bind_cols(tibble(group), tickers_good)    
   #create clusters
-  cluster <- new_cluster(cl)     
+  cluster <- new_cluster(cl-1)     
   #partition by group
-  by_group <- tickers_good %>% group_by(group) %>% partition(cluster)              
+  by_group <- tickers_good %>% group_by(group) %>% partition(cluster)
   #setup clusers
-  from <- "1900-01-01"
-  to   <- today()
-  
   by_group$cluster %>% cluster_library("purrr") %>% cluster_library("tidyquant") %>% cluster_assign("from" = from) %>%   cluster_assign("to" = to)
-  
   #run parallelized code
-  start <- proc.time() # Start clock
   stockdata <- by_group %>%
     mutate(
       stock.prices = map(`tickers.symbol`,
-                         function(.x) tq_get(.x,
-                                             get  = "stock.prices",
-                                             from = from,
-                                             to   = to)
+                                function(.x) tq_get(.x,
+                                                    get  = "stock.prices",
+                                                    from = from,
+                                                    to   = to)
       )
     ) %>%
     collect() %>% 
     unnest() %>%
-    arrange(`tickers.symbol`)
+    arrange(`tickers.symbol`) %>%
+    ungroup()
   
   stockdata$log_ret_adj <- calc.ret(stockdata$adjusted, tickers = stockdata$symbol, type.return = 'log') #calculate log returns
+  
+  #add rsi
+  stockdata <- stockdata %>%
+    group_by(symbol) %>%
+    group_map(~mutate(., rsi = rsi_fun(adjusted))) %>%
+    reduce(full_join)
+  
   #Push to SQL
   dbWriteTable(con, name = "Stock_Data", value = stockdata, append = TRUE)
 }
+
+tic()
+
 
 
 try(dbExecute(con, 'DROP TABLE "Stock_Data"'), silent = TRUE) #delete old table query
 
 
-#run first function then for loop for rest of tickers
-for(i in 1:length(tickers_list)){
-  tickers_tmp <- data.frame(tickers_list[i])   
+#map functions to list of tickers
+
+
+fix_ticker_list<- function(tickers){
+  tickers_tmp <- data.frame(tickers)   
   tickers_tmp <- tibble(tickers_tmp)
-  Get_Data(tickers_tmp)
+  return(tickers_tmp)
 }
 
+tickers_list_fixed <- map(tickers_list, fix_ticker_list)
+
+map(tickers_list_fixed, Get_Data)
+
+toc()
 
 #CALCULATE STOP LOSS VALUES
-
+tic()
 #get positions
 positions <- get_positions(RH)
 
@@ -111,37 +136,5 @@ stops_tbl <- as_tibble(stops)     #convert to table
 try(dbExecute(con, 'DROP TABLE "Stops"'), silent = TRUE) #delete old table query
 dbWriteTable(con, name = "Stops", value = stops_tbl, append = TRUE)  #write stops to sql table
 
-
-#TECHNICAL INDICATORS
-
-library(ncar)
-library(tfplot)
-library(parallel)
-library(RPostgres)
-
-obv_price_divergence <- function(symbol){
-  data <- tibble(dbGetQuery(con, paste0(
-    'SELECT volume, adjusted FROM "Stock_Data" WHERE  symbol =', " '", paste(symbol), "'", ' ORDER BY "date" ASC')))
-  data <- na.omit(data)
-  if (nrow(data)>21) {
-    obv <- OBV(data$adjusted, data$volume)
-    obv_ema <- EMA(na.approx(obv, n=20))
-    close <- data$adjusted
-    close_ema <- EMA(na.approx(data$adjusted, n=20))
-    obv_diff <- ts((obv-obv_ema)/obv_ema)
-    close_diff <- ts((close-close_ema)/close_ema)
-    diff_obv_close <- ((obv_diff)-(close_diff))
-    obv_divergence <- last(diff_obv_close)
-    df <- data.frame(symbol, obv_divergence)
-    dbWriteTable(con, name = "Indicators", value = df, append = TRUE)
-  }
-  else {NA}
-}
-
-try(dbExecute(con, 'DROP TABLE "Indicators"'), silent = TRUE) #delete old table query
-
-mclapply(tickers_good$`tickers$symbol`, obv_price_divergence,
-         mc.preschedule = TRUE, mc.set.seed = TRUE,
-         mc.silent = FALSE, mc.cores = detectCores()-1,
-         mc.cleanup = TRUE, mc.allow.recursive = TRUE, affinity.list = NULL)
+toc()
 
