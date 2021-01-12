@@ -123,7 +123,7 @@ names(symb) <- symb   #assign names to list
 
 #function to calculate stop losses using high - 3*ATR  (21 day)
 atr_trailing_stop <- function(symbol){
-  hlc <- dbGetQuery(con, paste0('SELECT high, low, close FROM "Stock_Data" WHERE symbol =', " '", symbol, "'", 'ORDER BY "date" ASC'))
+  hlc <- dbGetQuery(con, paste0('SELECT high, low, close FROM "Stock_Data" WHERE "tickers.symbol" =', " '", symbol, "'", 'ORDER BY "date" ASC'))
   hlc <- na.omit(hlc)
   atr <-ATR(tail(hlc, 50), n = 21)
   atr_tibble <- as_tibble(atr)
