@@ -102,7 +102,8 @@ Get_Data <- function(tickers_good) {
                                 function(.x) tq_get(.x,
                                                     get  = "stock.prices",
                                                     from = from,
-                                                    to   = to)
+                                                    to   = to,
+                                                    complete_cases = TRUE)
       )
     ) %>%
     collect() %>% 
@@ -146,7 +147,11 @@ Get_Data <- function(tickers_good) {
            williamsAD = tibble(open, high, low, adjusted) %>% na.approx(na.rm = FALSE) %>% williamsAD_fun(),
            wpr = tibble(high, low, adjusted) %>% na.approx(na.rm = FALSE) %>% wpr_fun(),
            zigzag = tibble(high, low) %>% na.approx(na.rm = FALSE) %>% zigzag_fun()
-    )
+    ) %>% 
+    ungroup()
+  
+  stockdata <- do.call("data.frame", stockdata)   #unnest dataframe variables
+  
   #Push to SQL
   dbWriteTable(con, name = "Stock_Data", value = stockdata, append = TRUE)
 }
