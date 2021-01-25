@@ -1,3 +1,4 @@
+suppressPackageStartupMessages({
 library(dplyr)
 library(multidplyr)
 library(tidyquant) 
@@ -5,24 +6,17 @@ library(parallel)
 library(tidyr)
 library(purrr)
 library(BatchGetSymbols)
-library(RobinHood)
 library(RPostgres)
 library(tibble)
 library(data.table)
-library(ncar)
-library(tfplot)
-library(tictoc)
-library(tibble)
 library(TTR)
-library(furrr)
+})
 
 sql_user <- Sys.getenv("sql_user")
 sql_pw <- Sys.getenv("sql_pw")
 
 #log into database
 con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
-
-
 
 #rsi function with error handling
 rsi_fun <- possibly(RSI, otherwise = NA)
@@ -62,20 +56,12 @@ from <- "1900-01-01"
 to <- today()
 cl <- detectCores() - 1
 
-tic()
-
-Get_Data <- function(tickers_good) {
+Get_Data <- function(tickers_good, group_num) {
   tickers_good <- data.frame(tickers_good)
   group <- rep(1:cl, length.out = nrow(tickers_good))
   tickers_good <- bind_cols(tibble(group), tickers_good)    
-  #create clusters
-  cluster <- new_cluster(cl)     
-  #partition by group
-  by_group <- tickers_good %>% group_by(group) %>% partition(cluster)
-  #setup clusers
-  by_group$cluster %>% cluster_library("purrr") %>% cluster_library("tidyquant") %>% cluster_assign("from" = from) %>%   cluster_assign("to" = to)
-  #run parallelized code
-  by_group %>%
+  tickers_good %>% 
+    filter(group == group_num) %>%
     mutate(
       stock.prices = map(`tickers.symbol`,
                          function(.x) tq_get(.x,
@@ -133,6 +119,7 @@ Get_Data <- function(tickers_good) {
 
 i <- read.table("iteration.txt")
 
-Get_Data(i)
+args <- commandArgs(trailingOnly = TRUE)
+group_num <- as.numeric(args[1])
 
-toc()
+Get_Data(i, group_num)
