@@ -44,7 +44,6 @@ def execute_stop(symbol):
     if last_price < stop_price:   #execute sell if price < stop
         print('Selling:', symbol)
         rs.orders.order_sell_fractional_by_quantity(symbol, quantity, timeInForce='gfd')
-        rs.order_Sell
 symbols_list = list(positions_data.keys())   #get list of symbols
 
 #apply function to list

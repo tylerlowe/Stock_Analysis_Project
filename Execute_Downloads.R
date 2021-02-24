@@ -4,6 +4,7 @@ library(RobinHood)
 library(RPostgres)
 library(tidyr)
 library(tictoc)
+library(purrr)
 })
 
 rh_user <- Sys.getenv('rh_user')
@@ -14,24 +15,7 @@ sql_pw <- Sys.getenv('sql_pw')
 #log into database
 con <- dbConnect(RPostgres::Postgres(), dbname = 'Robinhood', host='localhost', port='5433', user= sql_user, password = sql_pw)
 
-#log into robinhood
-RH = RobinHood(username = rh_user, password = rh_pw)
-
-tickers = get_tickers(RH)
-
-
-
-tickers = filter(tickers, rhs_tradability == 'tradable' & state == 'active')
-
-tickers_good <- tibble(tickers$symbol)  #filter tickers
-
-num_groups = 35     #create 35 groups for parallelization            
-
-#split the list of tickers into groups to avoid ram issues
-tickers_list <- tickers_good %>% 
-  group_by((row_number()-1) %/% (n()/num_groups)) %>%
-  nest %>% pull(data)
-
+tickers_list <- readRDS("tickers_list")
 
 try(dbExecute(con, 'DROP TABLE "Stock_Data"'), silent = TRUE) #delete old table query
 
@@ -57,7 +41,7 @@ atr_trailing_stop <- function(sym){
   atr <- dbGetQuery(con, paste0('SELECT "date", "atr.atr", "atr.trueHigh" FROM "Stock_Data" WHERE symbol =', " '", sym, "'", 'ORDER BY "date" ASC'))
   purchase_date <- positions %>% filter(symbol == sym) %>% select(updated_at)
   atr <- atr %>% filter(date >= as.Date(purchase_date$updated_at))
-  atr_stop <- atr$atr.trueHigh - atr$atr.atr*2.85
+  atr_stop <- atr$atr.trueHigh - atr$atr.atr*3
   max(atr_stop, na.rm = TRUE)
 }
 
