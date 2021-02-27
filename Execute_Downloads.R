@@ -27,26 +27,3 @@ for (i in 1:length(tickers_list)) {
   toc()
 }
 
-###stop losses
-
-#get positions
-positions <- get_positions(RH)
-
-#get list of symbols currently held
-symb <- positions$symbol
-names(symb) <- symb   #assign names to list
-
-#function to calculate stop losses using high - 3*ATR  (21 day)
-atr_trailing_stop <- function(sym){
-  atr <- dbGetQuery(con, paste0('SELECT "date", "atr.atr", "atr.trueHigh" FROM "Stock_Data" WHERE symbol =', " '", sym, "'", 'ORDER BY "date" ASC'))
-  purchase_date <- positions %>% filter(symbol == sym) %>% select(updated_at)
-  atr <- atr %>% filter(date >= as.Date(purchase_date$updated_at))
-  atr_stop <- atr$atr.trueHigh - atr$atr.atr*3
-  max(atr_stop, na.rm = TRUE)
-}
-
-stops <- lapply(symb, atr_trailing_stop)   #apply atr function to list
-stops_tbl <- as_tibble(stops)
-
-try(dbExecute(con, 'DROP TABLE "Stops"'), silent = TRUE) #delete old table query
-dbWriteTable(con, name = "Stops", value = stops_tbl, append = TRUE)  #write stops to sql table

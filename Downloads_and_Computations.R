@@ -77,43 +77,6 @@ Get_Data <- function(tickers_good, group_num) {
     ungroup() %>%
     subset(select = c(group, symbol, date, open, high, low, close, volume, adjusted)) %>%
     drop_na() %>%
-    group_by(symbol) %>%
-    mutate(log_ret_adj = calc.ret(adjusted, tickers = symbol, type.return = 'log'),
-           rsi_price = adjusted  %>% rsi_fun(),
-           rsi_volume = volume  %>% rsi_fun(),
-           cci = tibble(high, low, adjusted)  %>% cci_fun(),
-           obv = obv_fun(adjusted, volume),
-           adx = tibble(high, low, adjusted)  %>% adx_fun() %>% as.data.table(),
-           aroon = tibble(high, low)  %>% aroon_fun() %>% as.data.table(), 
-           atr = tibble(high, low, adjusted)  %>% atr_fun() %>% as.data.table(),
-           bbands = tibble(high, low, adjusted)  %>% bbands_fun() %>% as.data.table(),
-           chaikinVol = tibble(high, low)  %>% chaikinvol_fun() %>% as.data.table(),
-           clv = tibble(high, low, adjusted)  %>% clv_fun() %>% as.data.table(),
-           cmo_price = adjusted  %>% cmo_fun() %>% as.data.table(),
-           cmo_volume = volume  %>% cmo_fun() %>% as.data.table(),
-           donchannel = tibble(high, low)  %>% donachianchannel_fun() %>% as.data.table(), 
-           dpo_price = adjusted  %>% dpo_fun() %>% as.data.table(),
-           dpo_volume = volume  %>% dpo_fun() %>% as.data.table(),
-           gmma_price = adjusted  %>% gmma_fun() %>% as.data.table(),
-           gmma_volume = volume  %>% gmma_fun() %>% as.data.table(),
-           kst = adjusted %>% kst_fun() %>% as.data.table(),
-           macd_price = adjusted  %>% macd_fun() %>% as.data.table(),
-           macd_volume = volume %>% macd_fun() %>% as.data.table(),
-           pbands = adjusted %>% pbands_fun() %>% as.data.table(),
-           sar = tibble(high, low) %>% sar_fun() %>% as.data.table(),
-           stoch = tibble(high, low, adjusted) %>% stoch_fun() %>% as.data.table(),
-           tdi = adjusted %>% tdi_fun() %>% as.data.table(),
-           trix = adjusted %>% trix_fun() %>% as.data.table(),
-           ultOscillator = tibble(high, low, adjusted) %>% ultimateOscillator_fun() %>% as.data.table(), 
-           vhf = adjusted %>% vhf_fun() %>% as.data.table(),
-           volatility = tibble(open, high, low, adjusted) %>% volatility_fun() %>% as.data.table(),
-           williamsAD = tibble(open, high, low, adjusted) %>% williamsAD_fun() %>% as.data.table(),
-           wpr = tibble(high, low, adjusted) %>% wpr_fun() %>% as.data.table(),
-           zigzag = tibble(high, low) %>% zigzag_fun() %>% as.data.table()
-    ) %>%
-    ungroup() %>%
-    do.call(what = data.table, .) %>%  #unnest dataframe variables
-    Filter(f = function(x)!all(is.na(x))) %>%
     dbWriteTable(conn = con, name = "Stock_Data", value = ., append = TRUE)  #Push to SQL
 }
 
